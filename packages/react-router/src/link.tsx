@@ -334,6 +334,34 @@ export function useLinkProps<
     ...resolvedInactiveProps.style,
   }
 
+  const normalizeHrefForSpecialChars = (href: string): string => {
+    try {
+      // For relative paths, we need to be more careful
+      if (href.startsWith('/')) {
+        // Split the path to handle pathname and search/hash separately
+        const [pathname, ...rest] = href.split('?')
+        const restStr = rest.length > 0 ? '?' + rest.join('?') : ''
+
+        // Only encode non-ASCII characters, don't re-encode already encoded characters
+        const encodedPathname = pathname!.replace(/[^\x20-\x7E]/g, (char) => {
+          return encodeURIComponent(char)
+        })
+
+        return encodedPathname + restStr
+      }
+
+      // For absolute URLs, use URL constructor
+      const url = new URL(href)
+      return url.href
+    } catch {
+      // Simple fallback: encode non-ASCII characters manually
+      // ASCII printable characters: space(32) to DEL(127)
+      return href.replace(/[^\x20-\x7E]/g, (char) => {
+        return encodeURIComponent(char)
+      })
+    }
+  }
+
   return {
     ...propsSafeToSpread,
     ...resolvedActiveProps,
@@ -341,8 +369,10 @@ export function useLinkProps<
     href: disabled
       ? undefined
       : next.maskedLocation
-        ? router.history.createHref(next.maskedLocation.href)
-        : router.history.createHref(next.href),
+        ? normalizeHrefForSpecialChars(
+            router.history.createHref(next.maskedLocation.href),
+          )
+        : normalizeHrefForSpecialChars(router.history.createHref(next.href)),
     ref: innerRef as React.ComponentPropsWithRef<'a'>['ref'],
     onClick: composeHandlers([onClick, handleClick]),
     onFocus: composeHandlers([onFocus, handleFocus]),
